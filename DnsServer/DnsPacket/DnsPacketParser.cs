@@ -53,10 +53,12 @@ namespace DnsServer
         {
             var (domain, shift) = ParseDomain(packet, position);
             var pos = reader.BaseStream.Seek(shift, SeekOrigin.Begin);
-            Type type = Type.A;
-            var typeByte = reader.ReadUInt16();
-            Class queryClass = Class.IN;
-            var classByte = reader.ReadUInt16();
+            //Type type = Type.A;
+            //var typeByte = reader.ReadUInt16();
+            var type = (Type) reader.ReadUInt16();
+            //Class queryClass = Class.IN;
+            //var classByte = reader.ReadUInt16();
+            var queryClass = (Class) reader.ReadUInt16();
             var ttl = reader.ReadUInt32();
             var dataLength = reader.ReadUInt16();
             var data = "";
@@ -69,7 +71,8 @@ namespace DnsServer
             }
             else if (type == Type.NS)
             {
-                var (name, nameShift) = ParseDomain(packet, (int)reader.BaseStream.Position);
+                var (name, nsShift) = ParseDomain(packet, (int)reader.BaseStream.Position);
+                var newPos = reader.BaseStream.Seek(nsShift, SeekOrigin.Begin);
                 data = name;
             }
             else if (type == Type.SOA)
@@ -91,10 +94,12 @@ namespace DnsServer
         {
             var (domain, shift) = ParseDomain(query, position);
             var pos = reader.BaseStream.Seek(shift, SeekOrigin.Begin);
-            Type type = Type.A;
-            var typeByte = reader.ReadUInt16();
-            Class queryClass = Class.IN;
-            var classByte = reader.ReadUInt16();
+            //Type type = Type.A;
+            //var typeByte = reader.ReadUInt16();
+            var type = (Type) reader.ReadUInt16();
+            //Class queryClass = Class.IN;
+            //var classByte = reader.ReadUInt16();
+            var queryClass = (Class) reader.ReadUInt16();
             var result = new DnsQuery
             {
                 Name = domain,
@@ -194,7 +199,7 @@ namespace DnsServer
         public static byte[] CreateQuery(DnsQuery query, int position, Dictionary<string, int> cache)
         {
             var result = new List<byte>();
-            var encodedDomain = EncodeDomain(query.Name, position, cache);
+            var encodedDomain = EncodeDomain(query.Name, position, cache, false);
             var type = (short)query.Type;
             var typeBytes = BitConverter.GetBytes(type);
             Array.Reverse(typeBytes);
@@ -207,23 +212,15 @@ namespace DnsServer
             return result.ToArray();
         }
 
-        private static byte[] EncodeDomain(string domain, int position, Dictionary<string, int> cache)
+        private static byte[] EncodeDomain(string domain, int position, Dictionary<string, int> cache, bool isData)
         {
             var result = new List<byte>();
-            //var domains = domain.Split('.');
-            //if (!cache.ContainsKey(domain))
-            //    cache[domain] = position;
-            //foreach (var part in domains)
-            //{
-            //    result.Add((byte) part.Length);
-            //    result.AddRange(Encoding.UTF8.GetBytes(part));
-            //}
             while (!string.IsNullOrEmpty(domain))
             {
                 var shift = domain.IndexOf(".", StringComparison.Ordinal);
                 if (cache.ContainsKey(domain))
                 {
-                    var number = (ushort) (0b11 << 14 | cache[domain]);
+                    var number = (ushort)(0b11 << 14 | cache[domain]);
                     var bytes = BitConverter.GetBytes(number);
                     Array.Reverse(bytes);
                     result.AddRange(bytes);
@@ -235,7 +232,7 @@ namespace DnsServer
                     result.Add((byte)name.Length);
                     var encodedName = Encoding.UTF8.GetBytes(name);
                     result.AddRange(encodedName);
-                    cache[domain] = position;
+                    cache[domain] = position+ (isData?2:0);
                     position += encodedName.Length + 1;
                     domain = domain.Substring(shift + 1);
                 }
@@ -247,7 +244,7 @@ namespace DnsServer
         public static byte[] CreateAnswer(DnsAnswer answer, int position, Dictionary<string, int> cache)
         {
             var result = new List<byte>();
-            var encodedDomain = EncodeDomain(answer.Name, position, cache);
+            var encodedDomain = EncodeDomain(answer.Name, position, cache, false);
             result.AddRange(encodedDomain);
 
             var type = (short)answer.Type;
@@ -270,14 +267,36 @@ namespace DnsServer
                 Console.WriteLine(answer.Data);
                 dataBytes = IPAddress.Parse(answer.Data).GetAddressBytes();
             }
+            else if (answer.Type==Type.NS)
+                dataBytes = EncodeDomain(answer.Data, position + result.Count, cache, true);
             else
-                dataBytes = EncodeDomain(answer.Data, position + result.Count, cache);
-            var length = (ushort) dataBytes.Length;
-            var lengthBytes=BitConverter.GetBytes(length);
+                dataBytes=new byte[0];
+            var length = (ushort)dataBytes.Length;
+            var lengthBytes = BitConverter.GetBytes(length);
             Array.Reverse(lengthBytes);
             result.AddRange(lengthBytes);
             result.AddRange(dataBytes);
             return result.ToArray();
+        }
+
+        public static DnsPacket CreateSimpleErrorPacket(DnsQuery query, ushort queryId)
+        {
+            var flags = new DnsFlags
+            {
+                RecursionDesired = true,
+                RecursionAvailable = true,
+                ReplyCode = (byte)5
+            };
+            var packet = new DnsPacket
+            {
+                QueryId = queryId,
+                Flags = flags,
+                Queries = new List<DnsQuery> {query},
+                Answers = new List<DnsAnswer>(),
+                AdditionalAnswers = new List<DnsAnswer>(),
+                AuthorityAnswers = new List<DnsAnswer>(),
+            };
+            return packet;
         }
     }
 }

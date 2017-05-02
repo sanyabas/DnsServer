@@ -29,7 +29,6 @@ namespace DnsServer
         public async Task<DnsPacket> HandleQuery(byte[] buffer)
         {
             var parsedPacket = DnsPacketParser.ParsePacket(buffer);
-            //DnsPacketParser.CreatePacket(parsedPacket);
             var queries = parsedPacket.Queries;
             var answers = await Task.WhenAll(queries.AsParallel().Select(async query =>
             {
@@ -42,15 +41,20 @@ namespace DnsServer
                 if (!answerInCache)
                 {
                     answer = await ResolveQuery(buffer);
+                    if (answer.Flags.ReplyCode != 0)
+                        return DnsPacketParser.CreateSimpleErrorPacket(query, parsedPacket.QueryId);
                     lock (AnswersCache)
                         AnswersCache[query] = answer;
+                }
+                else
+                {
+                    logger.Info("Query <{0} {1} {2}> found in cache!",query.Name,query.Class,query.Type);
+                    answer.QueryId = parsedPacket.QueryId;
                 }
                 return answer;
             }));
             return answers[0];
         }
-
-        //private async Task SendAnswer()
 
         private async Task<DnsPacket> ResolveQuery(DnsQuery query)
         {
@@ -74,7 +78,6 @@ namespace DnsServer
             logger.Info("Handling query");
             using (var udpClient = new UdpClient())
             {
-                //var buffer = DnsPacketParser.CreatePacket(packet);
                 var sendTask = udpClient.SendAsync(packet, packet.Length, remoteEndPoint);
                 var sendRes= await Task.WhenAny(sendTask,Task.Delay(3000));
                 int sent;
@@ -90,14 +93,11 @@ namespace DnsServer
 
                 }
                 logger.Info("received from server");
-                //var answer = await udpClient.ReceiveAsync();
                 if (!Equals(result.RemoteEndPoint, remoteEndPoint))
                     throw new NotImplementedException();
                 var parsedAnswer = DnsPacketParser.ParsePacket(result.Buffer);
                 logger.Info("Received answer for <{0} {1} {2}>",parsedAnswer.Queries[0].Name, parsedAnswer.Queries[0].Type, parsedAnswer.Queries[0].Class);
-                //if (parsedAnswer.QueryId == packet.QueryId)
                     return parsedAnswer;
-                throw new ArgumentException();
             }
         }
     }
