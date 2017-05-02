@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,115 +9,76 @@ namespace DnsServer
 {
     class Program
     {
+        //TODO logging
         static void Main(string[] args)
         {
-//            Task.Run(() => Run());
-            Task.Run(async () =>
-            {
-                using (var udpClient = new UdpClient(31337))
-                {
-                    string loggingEvent = "";
-                    while (true)
-                    {
-                        //IPEndPoint object will allow us to read datagrams sent from any source.
-                        var receivedResults = await udpClient.ReceiveAsync();
-                        loggingEvent += Encoding.ASCII.GetString(receivedResults.Buffer);
-                    }
-                }
-            });
+            Run();
+            //var t = new Task(async () =>
+            //{
+            //    using (var udpClient = new UdpClient(31337))
+            //    {
+            //        string loggingEvent = "";
+            //        while (true)
+            //        {
+            //            Console.WriteLine("start");
+            //            //IPEndPoint object will allow us to read datagrams sent from any source.
+            //            var receivedResults = await udpClient.ReceiveAsync();
+            //            loggingEvent += Encoding.ASCII.GetString(receivedResults.Buffer);
+            //            Console.WriteLine(loggingEvent);
+            //        }
+            //    }
+            //},TaskCreationOptions.AttachedToParent);
+            //t.Start();
+
+            //t.Wait();
         }
 
         static void Run()
         {
-            using (var listener = new UdpClient(31337))
+            var server=new DnsServer();
+            using (var listener = new UdpClient(53))
             {
                 Console.WriteLine("start listening");
-                listener.StartProcessingRequestsAsync(CreateAsyncCallback());
+                listener.StartProcessingRequestsAsync(CreateAsyncCallback(server)).Wait();
             }
         }
 
-        static Func<UdpReceiveResult, Task> CreateAsyncCallback()
+        static Func<UdpReceiveResult, Task<byte[]>> CreateAsyncCallback(DnsServer server)
         {
             return async result =>
             {
-                File.WriteAllText("recv.txt", result.Buffer.ToString());
+                var answer= await server.HandleQuery(result.Buffer);
+                return DnsPacketParser.CreatePacket(answer);
             };
         }
     }
 
-    public static class UdpClientExtensions
+    public class BigEndianBinaryReader : BinaryReader
     {
-        public static async Task StartProcessingRequestsAsync(this UdpClient client,
-            Func<UdpReceiveResult, Task> callback)
+        public BigEndianBinaryReader(Stream input) : base(input)
         {
-            while (true)
-            {
-                try
-                {
-                    var endPoint = new IPEndPoint(IPAddress.Any, 0);
-                    Console.WriteLine("try");
-                    var query = await client.ReceiveAsync();
-                    Console.WriteLine("get");
-                    await callback(query);
-                }
-                catch (Exception e)
-                {
-                    throw new NotImplementedException();
-                }
-            }
         }
-    }
 
-    public class DnsPacket
-    {
-        public int QueryId { get; }
-        public DnsFlags Flags { get; set; }
-        public List<DnsQuery> Queries { get; set; }
-        public List<DnsAnswer> Answers { get; set; }
-        public List<DnsAnswer> AuthorityAnswers { get; set; }
-        public List<DnsAnswer> AdditionalAnswers { get; set; }
-    }
+        public BigEndianBinaryReader(Stream input, Encoding encoding) : base(input, encoding)
+        {
+        }
 
-    public class DnsFlags
-    {
-        public bool Response { get; set; }
-        public Opcode Opcode { get; set; }
-        public bool Truncated { get; set; }
-        public bool Recursion { get; set; }
-        public bool AdBit { get; set; }
-        public bool NonAuthenticated { get; set; }
-    }
+        public BigEndianBinaryReader(Stream input, Encoding encoding, bool leaveOpen) : base(input, encoding, leaveOpen)
+        {
+        }
 
-    public enum Opcode
-    {
-        Standard
-    }
+        public override ushort ReadUInt16()
+        {
+            var a16 = base.ReadBytes(2);
+            Array.Reverse(a16);
+            return BitConverter.ToUInt16(a16, 0);
+        }
 
-    public class DnsQuery
-    {
-        public string Name { get; set; }
-        public Type Type { get; set; }
-        public Class Class { get; set; }
-    }
-
-    public class DnsAnswer
-    {
-        public string Name { get; set; }
-        public Type Type { get; set; }
-        public Class Class { get; set; }
-        public int TTL { get; set; }
-        public string Data { get; set; }
-    }
-
-    public enum Type
-    {
-        A,
-        NS,
-        MX
-    }
-
-    public enum Class
-    {
-        IN
+        public override uint ReadUInt32()
+        {
+            var a32 = ReadBytes(4);
+            Array.Reverse(a32);
+            return BitConverter.ToUInt32(a32, 0);
+        }
     }
 }
