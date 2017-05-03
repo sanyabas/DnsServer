@@ -34,8 +34,28 @@ namespace DnsServer
             throw new NotImplementedException();
         }
 
+        public async Task CleanExpiredAnswers()
+        {
+                logger.Info("GC started");
+                //var toDelete = new List<DnsQuery>();
+            var toDelete = AnswersCache
+                .Where(pair => pair.Value.Item1.Answers.Any() &&
+                               pair.Value.Item1.Answers.Min(a => a.TTL) + pair.Value.Item2.TotalSeconds <
+                               DateTimeExtensions.UtcNow().TotalSeconds)
+                .Select(p => p.Key)
+                .ToList();
+
+                foreach (var query in toDelete)
+                {
+                    (DnsPacket, TimeSpan) answer;
+                    AnswersCache.TryRemove(query,out answer);
+                    logger.Info("Query {0} {1} removed from cache",query.Name,query.Type);
+                }
+        }
+
         public async Task<DnsPacket> HandleQuery(byte[] buffer)
         {
+            await CleanExpiredAnswers();
             var parsedPacket = DnsPacketParser.ParsePacket(buffer);
             var queries = parsedPacket.Queries;
             var answers = await Task.WhenAll(queries.AsParallel().Select(async query =>
@@ -48,10 +68,18 @@ namespace DnsServer
                     answerInCache = AnswersCache.TryGetValue(query, out answer);
                 if (!answerInCache || answer.Item2.TotalSeconds+answer.Item1.Answers.Min(a=>a.TTL)<DateTimeExtensions.UtcNow().TotalSeconds)
                 {
-                    answer.Item1 = await ResolveQuery(buffer);
+                    try
+                    {
+                        answer.Item1 = await ResolveQuery(buffer);
+                    }
+                    catch (TimeoutException e)
+                    {
+                        logger.Error(e,"Query time out: {0} {1}",query.Name,query.Type);
+                        return DnsPacketParser.CreateSimpleErrorPacket(query, parsedPacket.QueryId,2);
+                    }
                     logger.Info("Query {0} {1}, TTL:{2}",query.Name,query.Type, (answer.Item1.Answers.Any()?answer.Item1.Answers.Min(a=>a.TTL):0));
                     if (answer.Item1.Flags.ReplyCode != 0)
-                        return DnsPacketParser.CreateSimpleErrorPacket(query, parsedPacket.QueryId);
+                        return DnsPacketParser.CreateSimpleErrorPacket(query, parsedPacket.QueryId,5);
   
                         AnswersCache[query] = (answer.Item1, DateTimeExtensions.UtcNow());
                 }
@@ -88,19 +116,20 @@ namespace DnsServer
             using (var udpClient = new UdpClient())
             {
                 var sendTask = udpClient.SendAsync(packet, packet.Length, remoteEndPoint);
-                var sendRes= await Task.WhenAny(sendTask,Task.Delay(3000));
+                var sendRes= await Task.WhenAny(sendTask,Task.Delay(1500));
                 int sent;
                 if (sendRes == sendTask)
                     sent = await sendTask;
                 logger.Info("sent to server");
                 var receiveTask = udpClient.ReceiveAsync();
-                var res= await Task.WhenAny(receiveTask, Task.Delay(3000));
+                var res= await Task.WhenAny(receiveTask, Task.Delay(1500));
                 UdpReceiveResult result=new UdpReceiveResult();
                 if (res == receiveTask)
                 {
                     result = await receiveTask;
-
                 }
+                else
+                    throw new TimeoutException("Query timed out");
                 logger.Info("received from server");
                 if (!Equals(result.RemoteEndPoint, remoteEndPoint))
                     throw new NotImplementedException();

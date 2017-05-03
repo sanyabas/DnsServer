@@ -279,13 +279,13 @@ namespace DnsServer
             return result.ToArray();
         }
 
-        public static DnsPacket CreateSimpleErrorPacket(DnsQuery query, ushort queryId)
+        public static DnsPacket CreateSimpleErrorPacket(DnsQuery query, ushort queryId,byte replyCode)
         {
             var flags = new DnsFlags
             {
                 RecursionDesired = true,
                 RecursionAvailable = true,
-                ReplyCode = (byte)5
+                ReplyCode = replyCode
             };
             var packet = new DnsPacket
             {

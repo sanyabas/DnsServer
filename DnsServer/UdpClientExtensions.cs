@@ -25,7 +25,7 @@ namespace DnsServer
                     var result = await callback(query);
                     logger.Info("Query handled");
                     var sendTask = client.SendAsync(result, result.Length, query.RemoteEndPoint);
-                    var sendRes = await Task.WhenAny(sendTask, Task.Delay(3000));
+                    var sendRes = await Task.WhenAny(sendTask, Task.Delay(2000));
                     int sent;
                     if (sendRes == sendTask)
                         sent = await sendTask;
@@ -33,7 +33,7 @@ namespace DnsServer
                 }
                 catch (Exception e)
                 {
-                    logger.Error(e);
+                    logger.Error(e.Message);
                 }
             }
         }
