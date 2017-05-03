@@ -10,15 +10,23 @@ using NLog;
 
 namespace DnsServer
 {
+
+    public static class DateTimeExtensions
+    {
+        public static TimeSpan UtcNow()
+        {
+            return DateTime.UtcNow - new DateTime(1970, 1, 1);
+        }
+    }
     public class DnsServer
     {
-        public static ConcurrentDictionary<DnsQuery, DnsPacket> AnswersCache { get; set; }
+        public static ConcurrentDictionary<DnsQuery, (DnsPacket, TimeSpan)> AnswersCache { get; set; }
         private static IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Parse("8.8.8.8"), 53);
         private static Logger logger = LogManager.GetLogger("DnsServer");
 
         public DnsServer()
         {
-            AnswersCache=new ConcurrentDictionary<DnsQuery, DnsPacket>();
+            AnswersCache=new ConcurrentDictionary<DnsQuery, (DnsPacket,TimeSpan)>();
         }
 
         private async Task SaveToFile(FileInfo file)
@@ -34,24 +42,25 @@ namespace DnsServer
             {
                 logger.Info("Handling query {0} {1} {2}",query.Name,query.Type,query.Class);
                 //TODO evrth
-                DnsPacket answer;
+                (DnsPacket, TimeSpan) answer;
                 bool answerInCache;
                 lock (AnswersCache)
                     answerInCache = AnswersCache.TryGetValue(query, out answer);
-                if (!answerInCache)
+                if (!answerInCache || answer.Item2.TotalSeconds+answer.Item1.Answers.Min(a=>a.TTL)<DateTimeExtensions.UtcNow().TotalSeconds)
                 {
-                    answer = await ResolveQuery(buffer);
-                    if (answer.Flags.ReplyCode != 0)
+                    answer.Item1 = await ResolveQuery(buffer);
+                    logger.Info("Query {0} {1}, TTL:{2}",query.Name,query.Type, (answer.Item1.Answers.Any()?answer.Item1.Answers.Min(a=>a.TTL):0));
+                    if (answer.Item1.Flags.ReplyCode != 0)
                         return DnsPacketParser.CreateSimpleErrorPacket(query, parsedPacket.QueryId);
-                    lock (AnswersCache)
-                        AnswersCache[query] = answer;
+  
+                        AnswersCache[query] = (answer.Item1, DateTimeExtensions.UtcNow());
                 }
                 else
                 {
                     logger.Info("Query <{0} {1} {2}> found in cache!",query.Name,query.Class,query.Type);
-                    answer.QueryId = parsedPacket.QueryId;
+                    answer.Item1.QueryId = parsedPacket.QueryId;
                 }
-                return answer;
+                return answer.Item1;
             }));
             return answers[0];
         }
