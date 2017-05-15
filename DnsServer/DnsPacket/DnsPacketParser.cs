@@ -53,11 +53,7 @@ namespace DnsServer
         {
             var (domain, shift) = ParseDomain(packet, position);
             var pos = reader.BaseStream.Seek(shift, SeekOrigin.Begin);
-            //Type type = Type.A;
-            //var typeByte = reader.ReadUInt16();
             var type = (Type) reader.ReadUInt16();
-            //Class queryClass = Class.IN;
-            //var classByte = reader.ReadUInt16();
             var queryClass = (Class) reader.ReadUInt16();
             var ttl = reader.ReadUInt32();
             var dataLength = reader.ReadUInt16();
@@ -94,11 +90,7 @@ namespace DnsServer
         {
             var (domain, shift) = ParseDomain(query, position);
             var pos = reader.BaseStream.Seek(shift, SeekOrigin.Begin);
-            //Type type = Type.A;
-            //var typeByte = reader.ReadUInt16();
             var type = (Type) reader.ReadUInt16();
-            //Class queryClass = Class.IN;
-            //var classByte = reader.ReadUInt16();
             var queryClass = (Class) reader.ReadUInt16();
             var result = new DnsQuery
             {

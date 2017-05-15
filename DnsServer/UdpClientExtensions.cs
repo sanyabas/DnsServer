@@ -19,7 +19,15 @@ namespace DnsServer
                 try
                 {
                     Console.WriteLine("asdsd");
-                    var query = client.ReceiveAsync().Result;
+                    UdpReceiveResult query;
+                    try
+                    {
+                        query = client.ReceiveAsync().Result;
+                    }
+                    catch (ObjectDisposedException e)
+                    {
+                        return;
+                    }
                     Console.WriteLine("bbb");
                     logger.Info("Query received");
                     var result = await callback(query);

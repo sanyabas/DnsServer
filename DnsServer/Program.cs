@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace DnsServer
@@ -12,7 +13,14 @@ namespace DnsServer
         //TODO logging
         static void Main(string[] args)
         {
-            Run();
+            try
+            {
+                Run();
+            }
+            catch (ArgumentException e)
+            {
+                return;
+            }
             //var t = new Task(async () =>
             //{
             //    using (var udpClient = new UdpClient(31337))
@@ -35,11 +43,26 @@ namespace DnsServer
 
         static void Run()
         {
-            var server=new DnsServer();
-            using (var listener = new UdpClient(53))
+            //var server=new DnsServer();
+            using (var server = new DnsServer())
             {
-                Console.WriteLine("start listening");
-                listener.StartProcessingRequestsAsync(CreateAsyncCallback(server)).Wait();
+                using (var listener = new UdpClient(53))
+                {
+                    Console.WriteLine("start listening");
+                    var token=new CancellationTokenSource().Token;
+                    var cts=new CancellationTokenSource();
+                    Console.CancelKeyPress += ((sender, args) => cts.Cancel());
+                    try
+                    {
+                        listener.StartProcessingRequestsAsync(CreateAsyncCallback(server)).Wait(cts.Token);
+                    }
+                    catch (OperationCanceledException e)
+                    {
+                        
+                        return;
+                    }
+
+                }
             }
         }
 

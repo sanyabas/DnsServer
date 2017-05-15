@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using NLog;
+using Newtonsoft.Json;
 
 namespace DnsServer
 {
@@ -17,11 +18,13 @@ namespace DnsServer
         {
             return DateTime.UtcNow - new DateTime(1970, 1, 1);
         }
+
+        
     }
-    public class DnsServer
+    public class DnsServer : IDisposable
     {
-        public static ConcurrentDictionary<DnsQuery, (DnsPacket, TimeSpan)> AnswersCache { get; set; }
-        private static IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Parse("8.8.8.8"), 53);
+        public ConcurrentDictionary<DnsQuery, (DnsPacket, TimeSpan)> AnswersCache { get; set; }
+        private static IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Parse("212.193.163.6"), 53);
         private static Logger logger = LogManager.GetLogger("DnsServer");
 
         public DnsServer()
@@ -138,5 +141,13 @@ namespace DnsServer
                     return parsedAnswer;
             }
         }
+
+        public void Dispose()
+        {
+            var str = JsonConvert.SerializeObject(AnswersCache);
+            logger.Info("Server stopping, saving cache to disk");
+            File.WriteAllText("cache.json",str);
+        }
     }
+
 }
