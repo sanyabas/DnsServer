@@ -268,8 +268,7 @@ namespace DnsServer
             //var toDelete = new List<DnsQuery>();
             var toDelete = answersCache
                 .Where(pair => pair.Value.Item1.Any() &&
-                               pair.Value.Item1.Min(a => a.TTL) + pair.Value.Item2.TotalSeconds <
-                               DateTimeExtensions.UtcNow().TotalSeconds)
+                               pair.Value.Item2<DateTimeExtensions.UtcNow())
                 .Select(p => p.Key)
                 .ToList();
 
