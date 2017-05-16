@@ -22,7 +22,8 @@ namespace DnsServer
                     var answersCount = reader.ReadUInt16();
                     var authorityAnswersCount = reader.ReadUInt16();
                     var additionalAnswersCount = reader.ReadUInt16();
-                    var nameCache = new Dictionary<int, string>();
+                    var nameCache = new Dictionary<int, byte[]>();
+                    var answerDomainCache = new Dictionary<int, string>();
                     var questions = new List<DnsQuery>();
                     var answers = new List<DnsAnswer>();
                     var additionalAnswers = new List<DnsAnswer>();
@@ -49,9 +50,9 @@ namespace DnsServer
             }
         }
 
-        private static DnsAnswer ParseAnswer(BinaryReader reader, byte[] packet, int position, Dictionary<int, string> nameCache)
+        private static DnsAnswer ParseAnswer(BinaryReader reader, byte[] packet, int position, Dictionary<int, byte[]> nameCache)
         {
-            var (domain, shift) = ParseDomain(packet, position);
+            var (domain, shift) = ParseDomain(packet, position,nameCache);
             var pos = reader.BaseStream.Seek(shift, SeekOrigin.Begin);
             var type = (Type) reader.ReadUInt16();
             var queryClass = (Class) reader.ReadUInt16();
@@ -67,7 +68,7 @@ namespace DnsServer
             }
             else if (type == Type.NS)
             {
-                var (name, nsShift) = ParseDomain(packet, (int)reader.BaseStream.Position);
+                var (name, nsShift) = ParseDomain(packet, (int)reader.BaseStream.Position,nameCache);
                 var newPos = reader.BaseStream.Seek(nsShift, SeekOrigin.Begin);
                 data = name;
             }
@@ -86,9 +87,9 @@ namespace DnsServer
             return answer;
         }
 
-        public static DnsQuery ParseQuery(BinaryReader reader, byte[] query, int position, Dictionary<int, string> cache = null)
+        public static DnsQuery ParseQuery(BinaryReader reader, byte[] query, int position, Dictionary<int, byte[]> cache = null)
         {
-            var (domain, shift) = ParseDomain(query, position);
+            var (domain, shift) = ParseDomain(query, position,cache);
             var pos = reader.BaseStream.Seek(shift, SeekOrigin.Begin);
             var type = (Type) reader.ReadUInt16();
             var queryClass = (Class) reader.ReadUInt16();
@@ -107,6 +108,7 @@ namespace DnsServer
 
             var resultArray = new byte[1024];
             var shift = 0;
+            var cacheStart=0;
             while (number != 0)
             {
                 var builder = new StringBuilder();
@@ -114,30 +116,63 @@ namespace DnsServer
                 {
 
                     var cachePosition = ((number & 0b111111) << 8) + query[position + 1];
-                    var localNumber = query[cachePosition];
-                    while (localNumber != 0)
-                    {
-                        Array.Copy(query, cachePosition + 1, resultArray, shift, localNumber);
-                        cachePosition += localNumber + 1;
-                        shift += localNumber;
-                        resultArray[shift] = (byte)'.';
-                        shift++;
-                        localNumber = query[cachePosition];
-                    }
+                    //resultArray = cache[cachePosition];
+                    Array.Copy(cache[cachePosition],0,resultArray,shift,cache[cachePosition].Length);
                     position++;
                     break;
+                    //TODO only one cache in one answer
+                    //TODO cache partial domains
+                    //break;
+                    //var parsed = "";
+                    //(parsed,position)=ParseDomain(query,cachePosition,cache);
+                    //var bytes=Encoding.UTF8.GetBytes(parsed);
+                    //Array.Copy(bytes, 0, resultArray, shift, bytes.Length);
+                    //shift += bytes.Length;
+                    //var localNumber = query[cachePosition];
+                    //while (localNumber != 0)
+                    //{
+                    //    Array.Copy(query, cachePosition + 1, resultArray, shift, localNumber);
+                    //    cachePosition += localNumber + 1;
+                    //    shift += localNumber;
+                    //    resultArray[shift] = (byte)'.';
+                    //    shift++;
+                    //    localNumber = query[cachePosition];
+                    //}
+                    //position++;
+                    //break;
                 }
                 else
                 {
+                    if (cacheStart == 0)
+                        cacheStart = position;
+                    //var newCacheStart = position;
                     Array.Copy(query, position + 1, resultArray, shift, number);
                     position += number + 1;
                     shift += number;
                     resultArray[shift] = (byte)'.';
                     shift++;
+                    //cache[newCacheStart]
                 }
                 number = query[position];
             }
+            //if (cacheStart!=0)
+            //{
+            //    cache[cacheStart] = resultArray.TakeWhile(b=>b!=0).ToArray();
+            //    position++;
+            //}
             position++;
+            resultArray = resultArray.TakeWhile(b => b != 0).ToArray();
+            if (cacheStart!=0)
+            for (var i = 0; i < resultArray.Length; i++)
+            {
+                if (resultArray[i] == 46 || i==0)
+                {
+                    var cacheShift = resultArray[i] == 46 ? 1 : 0;
+                    var temp = new byte[512];
+                    Array.Copy(resultArray,i+cacheShift,temp,0,resultArray.Length-i-cacheShift);
+                    cache[cacheStart + i+cacheShift] = temp.TakeWhile(b => b != 0).ToArray();
+                }
+            }
             var result = Encoding.UTF8.GetString(resultArray.TakeWhile(b => b != 0).ToArray());
             return (result, position);
         }
