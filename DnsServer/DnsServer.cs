@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -46,7 +44,6 @@ namespace DnsServer
                 .Select(async query =>
                 {
                     logger.Info("Handling query {0} {1} {2}", query.Name, query.Type, query.Class);
-                    //TODO evrth
                     (DnsPacket, TimeSpan) answer;
                     DnsPacket resultAnswer;
 //                    bool answerInCache;
@@ -146,138 +143,6 @@ namespace DnsServer
             var str = JsonConvert.SerializeObject(AnswersCache);
             logger.Info("Server stopping, saving cache to disk");
             File.WriteAllText("cache.json", str);
-        }
-    }
-
-    public class DnsCache
-    {
-        public ConcurrentDictionary<(string, Type), (string, TimeSpan)> DomainToIp { get; set; }
-        public ConcurrentDictionary<(string, Type), (string, TimeSpan)> IpToDomain { get; set; }
-        private ConcurrentDictionary<(string, Type), (List<DnsAnswer>, TimeSpan)> answersCache;
-        private static Logger logger = LogManager.GetLogger("DnsServer");
-
-        public DnsCache()
-        {
-            DomainToIp = new ConcurrentDictionary<(string, Type), (string, TimeSpan)>();
-            IpToDomain = new ConcurrentDictionary<(string, Type), (string, TimeSpan)>();
-            answersCache=new ConcurrentDictionary<(string, Type), (List<DnsAnswer>, TimeSpan)>();
-        }
-
-        public bool TryGetIp(string domain, Type type, out string ip)
-        {
-            if (TryGetValue(DomainToIp, domain, type, out var value))
-            {
-                ip = value;
-                return true;
-            }
-            ip = null;
-            return false;
-        }
-
-        public bool TryGetDomain(string ip, Type type, out string domain)
-        {
-            if (TryGetValue(IpToDomain, ip, type, out var value))
-            {
-                domain = value;
-                return true;
-            }
-            domain = null;
-            return false;
-        }
-
-        public bool TryGetAnswer(string query, Type type, out List<DnsAnswer> answer)
-        {
-            var currentTime = DateTimeExtensions.UtcNow();
-            if (answersCache.TryGetValue((query, type), out var result))
-            {
-                if (currentTime < result.Item2)
-                {
-                    answer = result.Item1;
-                    return true;
-                }
-            }
-            answer = null;
-            return false;
-        }
-
-        public void PutAnswers(IEnumerable<DnsAnswer> answers)
-        {
-            foreach (var answer in answers)
-                PutAnswer(answer.Name,answer.Type,answer);
-        }
-
-        public void PutAnswer(string query, Type type, DnsAnswer answer)
-        {
-            var currentTime = DateTimeExtensions.UtcNow();
-            var ttlTimeSpan=TimeSpan.FromSeconds(answer.TTL);
-            var expirationTime = currentTime + ttlTimeSpan;
-            if (answersCache.ContainsKey((query, type)))
-            {
-                if (answersCache[(query, type)].Item2 > expirationTime)
-                {
-                    var oldItem = answersCache[(query, type)];
-                    var newItem = (oldItem.Item1, expirationTime);
-                    answersCache[(query, type)] = newItem;
-                }
-                answersCache[(query, type)].Item1.Add(answer);
-            }
-            else
-            {
-                answersCache[(query, type)] = (new List<DnsAnswer> {answer},expirationTime);
-            }
-        }
-
-        private bool TryGetValue(IDictionary<(string, Type), (string, TimeSpan)> dictionary, string key,
-            Type type, out string value)
-        {
-            var currentTime = DateTimeExtensions.UtcNow();
-            if (dictionary.TryGetValue((key, type), out var result))
-            {
-                if (currentTime < result.Item2)
-                {
-                    value = result.Item1;
-                    return true;
-                }
-            }
-            value = null;
-            return false;
-        }
-
-        public void PutIpToDomain(string ip, Type type, string domain,uint ttl)
-        {
-            PutValue(IpToDomain,ip,type,domain,ttl);
-        }
-
-        public void PutDomainToIp(string domain, Type type, string ip, uint ttl)
-        {
-            PutValue(DomainToIp,domain,type,ip,ttl);
-        }
-
-        private void PutValue(IDictionary<(string, Type), (string, TimeSpan)> dictionary, string key, Type type,
-            string value, uint ttl)
-        {
-            var currentTime = DateTimeExtensions.UtcNow();
-            var ttlTimeSpan=TimeSpan.FromSeconds(ttl);
-            var expirationTime = currentTime + ttlTimeSpan;
-            dictionary[(key, type)] = (value, expirationTime);
-        }
-
-        public async Task CleanExpiredAnswers()
-        {
-            logger.Info("GC started");
-            //var toDelete = new List<DnsQuery>();
-            var toDelete = answersCache
-                .Where(pair => pair.Value.Item1.Any() &&
-                               pair.Value.Item2<DateTimeExtensions.UtcNow())
-                .Select(p => p.Key)
-                .ToList();
-
-            foreach (var query in toDelete)
-            {
-//                (DnsPacket, TimeSpan) answer;
-                answersCache.TryRemove(query, out var answer);
-                logger.Info("Query {0} {1} removed from cache", query.Item1, query.Item2);
-            }
         }
     }
 }

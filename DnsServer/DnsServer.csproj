@@ -54,6 +54,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DnsCache.cs" />
     <Compile Include="DnsPacket\Class.cs" />
     <Compile Include="DnsPacket\DnsAnswer.cs" />
     <Compile Include="DnsPacket\DnsFlags.cs" />
