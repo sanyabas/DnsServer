@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -46,7 +47,7 @@ namespace DnsServer
             //var server=new DnsServer();
             using (var server = new DnsServer())
             {
-                using (var listener = new UdpClient(53))
+                using (var listener = new UdpClient(new IPEndPoint(IPAddress.Any, 53)))
                 {
                     Console.WriteLine("start listening");
                     var token=new CancellationTokenSource().Token;
@@ -54,6 +55,7 @@ namespace DnsServer
                     Console.CancelKeyPress += ((sender, args) => cts.Cancel());
                     try
                     {
+                        listener.Client.ReceiveTimeout = 3;
                         listener.StartProcessingRequestsAsync(CreateAsyncCallback(server)).Wait(cts.Token);
                     }
                     catch (OperationCanceledException e)
