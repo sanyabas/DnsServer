@@ -20,19 +20,21 @@ namespace DnsServer
                 {
                     Console.WriteLine("asdsd");
                     UdpReceiveResult query;
-                    try
-                    {
-                        query = client.ReceiveAsync().Result;
-                    }
-                    catch (ObjectDisposedException e)
-                    {
-                        return;
-                    }
+                    var receiveTask = client.ReceiveAsync().ConfigureAwait(false);
+                    //var res = await Task.WhenAny(receiveTask, Task.Delay(1500));
+                    UdpReceiveResult recvresult = new UdpReceiveResult();
+                    await receiveTask;
+                    //if (res == receiveTask)
+                    //{
+                        recvresult = await receiveTask;
+                    //}
+                    //else
+                    //    continue;
                     Console.WriteLine("bbb");
                     logger.Info("Query received");
-                    var result = await callback(query);
+                    var result = await callback(recvresult);
                     logger.Info("Query handled");
-                    var sendTask = client.SendAsync(result, result.Length, query.RemoteEndPoint);
+                    var sendTask = client.SendAsync(result, result.Length, recvresult.RemoteEndPoint);
                     var sendRes = await Task.WhenAny(sendTask, Task.Delay(2000));
                     int sent;
                     if (sendRes == sendTask)
