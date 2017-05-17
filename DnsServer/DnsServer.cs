@@ -22,18 +22,30 @@ namespace DnsServer
         public DnsCache AnswersCache { get; set; }
         private static IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Parse("212.193.163.6"), 53);
         private static Logger logger = LogManager.GetLogger("DnsServer");
+        private bool cached;
+        private readonly string cacheFilename;
 
-        public DnsServer()
+        public DnsServer(string cacheFilename)
         {
+            this.cacheFilename = cacheFilename;
             AnswersCache = new DnsCache();
+            InitializeCache();
         }
 
-        private async Task SaveToFile(FileInfo file)
+        private void InitializeCache()
         {
-            throw new NotImplementedException();
+            try
+            {
+                var cacheStr=File.ReadAllText(cacheFilename);
+                AnswersCache=JsonConvert.DeserializeObject<DnsCache>(cacheStr);
+                logger.Info("Cache loaded");
+            }
+            catch (Exception e)
+            {
+                logger.Error("Error while loading cache: {0}",e.Message);
+                logger.Info("Loading server without cache");
+            }
         }
-
-
 
         public async Task<DnsPacket> HandleQuery(byte[] buffer)
         {
@@ -43,37 +55,37 @@ namespace DnsServer
             var answers = await Task.WhenAll(queries.AsParallel()
                 .Select(async query =>
                 {
-                    logger.Info("Handling query {0} {1} {2}", query.Name, query.Type, query.Class);
+                    logger.Info("Handling query {0} {1} {2}", query.Name, query.AnswerType, query.Class);
                     (DnsPacket, TimeSpan) answer;
                     DnsPacket resultAnswer;
-//                    bool answerInCache;
-//                    lock (AnswersCache)
-//                        answerInCache = AnswersCache.TryGetValue(query, out answer);
-                    var answerInCache = AnswersCache.TryGetAnswer(query.Name, query.Type, out var dnsAnswers);
+                    //                    bool answerInCache;
+                    //                    lock (AnswersCache)
+                    //                        answerInCache = AnswersCache.TryGetValue(query, out answer);
+                    var answerInCache = AnswersCache.TryGetAnswer(query.Name, query.AnswerType, out var dnsAnswers);
                     if (!answerInCache)
                     {
                         try
                         {
-//                            answer.Item1 = await ResolveQuery(buffer);
-                            resultAnswer=await ResolveQuery(buffer);
+                            //                            answer.Item1 = await ResolveQuery(buffer);
+                            resultAnswer = await ResolveQuery(buffer);
                         }
                         catch (TimeoutException e)
                         {
-                            logger.Error(e, "Query time out: {0} {1}", query.Name, query.Type);
+                            logger.Error(e, "Query time out: {0} {1}", query.Name, query.AnswerType);
                             return DnsPacketParser.CreateSimpleErrorPacket(query, parsedPacket.QueryId, 2);
                         }
-                        logger.Info("Query {0} {1}, TTL:{2}", query.Name, query.Type,
+                        logger.Info("Query {0} {1}, TTL:{2}", query.Name, query.AnswerType,
                             (resultAnswer.Answers.Any() ? resultAnswer.Answers.Min(a => a.TTL) : 0));
                         if (resultAnswer.Flags.ReplyCode != 0)
                             return DnsPacketParser.CreateSimpleErrorPacket(query, parsedPacket.QueryId, 5);
 
-//                        AnswersCache[query] = (answer.Item1, DateTimeExtensions.UtcNow());
+                        //                        AnswersCache[query] = (answer.Item1, DateTimeExtensions.UtcNow());
                         PutAsnwersInCache(resultAnswer);
                     }
                     else
                     {
-                        logger.Info("Query <{0} {1} {2}> found in cache!", query.Name, query.Class, query.Type);
-//                        answer.Item1.QueryId = parsedPacket.QueryId;
+                        logger.Info("Query <{0} {1} {2}> found in cache!", query.Name, query.Class, query.AnswerType);
+                        //                        answer.Item1.QueryId = parsedPacket.QueryId;
                         parsedPacket.Answers.AddRange(dnsAnswers);
                         resultAnswer = parsedPacket;
                         resultAnswer.Flags.Response = true;
@@ -133,16 +145,23 @@ namespace DnsServer
                     throw new NotImplementedException();
                 var parsedAnswer = DnsPacketParser.ParsePacket(result.Buffer);
                 logger.Info("Received answer for <{0} {1} {2}>", parsedAnswer.Queries[0].Name,
-                    parsedAnswer.Queries[0].Type, parsedAnswer.Queries[0].Class);
+                    parsedAnswer.Queries[0].AnswerType, parsedAnswer.Queries[0].Class);
                 return parsedAnswer;
             }
         }
 
         public void Dispose()
         {
-            var str = JsonConvert.SerializeObject(AnswersCache);
-            logger.Info("Server stopping, saving cache to disk");
-            File.WriteAllText("cache.json", str);
+            lock (AnswersCache)
+            {
+                if (cached)
+                    return;
+                var str = JsonConvert.SerializeObject(AnswersCache);
+                logger.Info("Server stopping, saving cache to disk");
+                File.WriteAllText(cacheFilename, str);
+                logger.Info("Successfully cached");
+                cached = true;
+            }
         }
     }
 }

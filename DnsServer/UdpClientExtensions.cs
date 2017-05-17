@@ -11,7 +11,7 @@ namespace DnsServer
     {
         private static Logger logger = LogManager.GetLogger("DnsServer");
         public static async Task StartProcessingRequestsAsync(this UdpClient client,
-            Func<UdpReceiveResult, Task<byte[]>> callback)
+            Func<UdpReceiveResult, Task<byte[]>> callback,Action quitHandler)
         {
             while (true)
             {
@@ -23,10 +23,18 @@ namespace DnsServer
                     var receiveTask = client.ReceiveAsync().ConfigureAwait(false);
                     //var res = await Task.WhenAny(receiveTask, Task.Delay(1500));
                     UdpReceiveResult recvresult = new UdpReceiveResult();
-                    await receiveTask;
+                    //await receiveTask;
                     //if (res == receiveTask)
                     //{
+                    try
+                    {
                         recvresult = await receiveTask;
+                    }
+                    catch (ObjectDisposedException e)
+                    {
+                        quitHandler();
+                        return;
+                    }
                     //}
                     //else
                     //    continue;

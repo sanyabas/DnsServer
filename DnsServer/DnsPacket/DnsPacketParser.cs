@@ -53,32 +53,32 @@ namespace DnsServer
         {
             var (domain, shift) = ParseDomain(packet, position,nameCache);
             var _ = reader.BaseStream.Seek(shift, SeekOrigin.Begin);
-            var type = (Type) reader.ReadUInt16();
+            var type = (AnswerType) reader.ReadUInt16();
             var queryClass = (Class) reader.ReadUInt16();
             var ttl = reader.ReadUInt32();
             var dataLength = reader.ReadUInt16();
             var data = "";
-            if (type == Type.A)
+            if (type == AnswerType.A)
             {
                 var dataArray = new List<byte>();
                 for (var i = 0; i < dataLength; i++)
                     dataArray.Add(reader.ReadByte());
                 data = string.Join(".", dataArray.Select(item => item.ToString()));
             }
-            else if (type == Type.NS)
+            else if (type == AnswerType.NS)
             {
                 var (name, nsShift) = ParseDomain(packet, (int)reader.BaseStream.Position,nameCache);
                 var __ = reader.BaseStream.Seek(nsShift, SeekOrigin.Begin);
                 data = name;
             }
-            else if (type == Type.SOA)
+            else if (type == AnswerType.SOA)
             {
                 data = "";
             }
             var answer = new DnsAnswer
             {
                 Class = queryClass,
-                Type = type,
+                AnswerType = type,
                 Name = domain,
                 TTL = ttl,
                 Data = data
@@ -90,13 +90,13 @@ namespace DnsServer
         {
             var (domain, shift) = ParseDomain(query, position,cache);
             var _ = reader.BaseStream.Seek(shift, SeekOrigin.Begin);
-            var type = (Type) reader.ReadUInt16();
+            var type = (AnswerType) reader.ReadUInt16();
             var queryClass = (Class) reader.ReadUInt16();
             var result = new DnsQuery
             {
                 Name = domain,
                 Class = queryClass,
-                Type = type
+                AnswerType = type
             };
             return result;
         }
@@ -192,7 +192,7 @@ namespace DnsServer
         {
             var result = new List<byte>();
             var encodedDomain = EncodeDomain(query.Name, position, cache, false);
-            var type = (short)query.Type;
+            var type = (short)query.AnswerType;
             var typeBytes = BitConverter.GetBytes(type);
             Array.Reverse(typeBytes);
             var classValue = (short)query.Class;
@@ -239,7 +239,7 @@ namespace DnsServer
             var encodedDomain = EncodeDomain(answer.Name, position, cache, false);
             result.AddRange(encodedDomain);
 
-            var type = (short)answer.Type;
+            var type = (short)answer.AnswerType;
             var typeBytes = BitConverter.GetBytes(type);
             Array.Reverse(typeBytes);
             result.AddRange(typeBytes);
@@ -254,12 +254,12 @@ namespace DnsServer
             result.AddRange(ttlBytes);
 
             byte[] dataBytes;
-            if (answer.Type == Type.A)
+            if (answer.AnswerType == AnswerType.A)
             {
                 Console.WriteLine(answer.Data);
                 dataBytes = IPAddress.Parse(answer.Data).GetAddressBytes();
             }
-            else if (answer.Type==Type.NS)
+            else if (answer.AnswerType==AnswerType.NS)
                 dataBytes = EncodeDomain(answer.Data, position + result.Count, cache, true);
             else
                 dataBytes=new byte[0];

@@ -45,18 +45,22 @@ namespace DnsServer
         static void Run()
         {
             //var server=new DnsServer();
-            using (var server = new DnsServer())
+            using (var server = new DnsServer("cache.json"))
             {
                 using (var listener = new UdpClient(new IPEndPoint(IPAddress.Any, 53)))
                 {
                     Console.WriteLine("start listening");
                     var token=new CancellationTokenSource().Token;
                     var cts=new CancellationTokenSource();
-                    Console.CancelKeyPress += ((sender, args) => cts.Cancel());
+                    Console.CancelKeyPress += ((sender, args) =>
+                    {
+                        cts.Cancel();
+                        args.Cancel = true;
+                    });
                     try
                     {
                         listener.Client.ReceiveTimeout = 3;
-                        listener.StartProcessingRequestsAsync(CreateAsyncCallback(server)).Wait(cts.Token);
+                        listener.StartProcessingRequestsAsync(CreateAsyncCallback(server),server.Dispose).Wait(cts.Token);
                     }
                     catch (OperationCanceledException e)
                     {

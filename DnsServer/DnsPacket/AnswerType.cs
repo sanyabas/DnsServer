@@ -1,6 +1,6 @@
 ﻿namespace DnsServer
 {
-    public enum Type
+    public enum AnswerType
     {
         A=1,
         NS,

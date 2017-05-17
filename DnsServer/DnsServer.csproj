@@ -62,7 +62,7 @@
     <Compile Include="DnsPacket\DnsPacketParser.cs" />
     <Compile Include="DnsPacket\DnsQuery.cs" />
     <Compile Include="DnsPacket\Opcode.cs" />
-    <Compile Include="DnsPacket\Type.cs" />
+    <Compile Include="DnsPacket\AnswerType.cs" />
     <Compile Include="DnsServer.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
