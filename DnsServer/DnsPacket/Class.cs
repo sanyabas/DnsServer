@@ -2,6 +2,6 @@
 {
     public enum Class
     {
-        IN=1
+        IN = 1
     }
 }

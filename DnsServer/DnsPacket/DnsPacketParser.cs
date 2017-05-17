@@ -28,13 +28,14 @@ namespace DnsServer
                     var additionalAnswers = new List<DnsAnswer>();
                     var authoritativeAnswers = new List<DnsAnswer>();
                     for (var i = 0; i < questionsCount; i++)
-                        questions.Add(ParseQuery(reader, packet, (int)reader.BaseStream.Position, nameCache));
+                        questions.Add(ParseQuery(reader, packet, (int) reader.BaseStream.Position, nameCache));
                     for (var i = 0; i < answersCount; i++)
-                        answers.Add(ParseAnswer(reader, packet, (int)reader.BaseStream.Position, nameCache));
+                        answers.Add(ParseAnswer(reader, packet, (int) reader.BaseStream.Position, nameCache));
                     for (var i = 0; i < authorityAnswersCount; i++)
-                        authoritativeAnswers.Add(ParseAnswer(reader, packet, (int)reader.BaseStream.Position, nameCache));
+                        authoritativeAnswers.Add(
+                            ParseAnswer(reader, packet, (int) reader.BaseStream.Position, nameCache));
                     for (var i = 0; i < additionalAnswersCount; i++)
-                        additionalAnswers.Add(ParseAnswer(reader, packet, (int)reader.BaseStream.Position, nameCache));
+                        additionalAnswers.Add(ParseAnswer(reader, packet, (int) reader.BaseStream.Position, nameCache));
                     var result = new DnsPacket
                     {
                         QueryId = id,
@@ -49,9 +50,10 @@ namespace DnsServer
             }
         }
 
-        private static DnsAnswer ParseAnswer(BinaryReader reader, byte[] packet, int position, Dictionary<int, byte[]> nameCache)
+        private static DnsAnswer ParseAnswer(BinaryReader reader, byte[] packet, int position,
+            Dictionary<int, byte[]> nameCache)
         {
-            var (domain, shift) = ParseDomain(packet, position,nameCache);
+            var (domain, shift) = ParseDomain(packet, position, nameCache);
             var _ = reader.BaseStream.Seek(shift, SeekOrigin.Begin);
             var type = (AnswerType) reader.ReadUInt16();
             var queryClass = (Class) reader.ReadUInt16();
@@ -67,7 +69,7 @@ namespace DnsServer
             }
             else if (type == AnswerType.NS)
             {
-                var (name, nsShift) = ParseDomain(packet, (int)reader.BaseStream.Position,nameCache);
+                var (name, nsShift) = ParseDomain(packet, (int) reader.BaseStream.Position, nameCache);
                 var __ = reader.BaseStream.Seek(nsShift, SeekOrigin.Begin);
                 data = name;
             }
@@ -86,9 +88,10 @@ namespace DnsServer
             return answer;
         }
 
-        public static DnsQuery ParseQuery(BinaryReader reader, byte[] query, int position, Dictionary<int, byte[]> cache = null)
+        public static DnsQuery ParseQuery(BinaryReader reader, byte[] query, int position,
+            Dictionary<int, byte[]> cache = null)
         {
-            var (domain, shift) = ParseDomain(query, position,cache);
+            var (domain, shift) = ParseDomain(query, position, cache);
             var _ = reader.BaseStream.Seek(shift, SeekOrigin.Begin);
             var type = (AnswerType) reader.ReadUInt16();
             var queryClass = (Class) reader.ReadUInt16();
@@ -107,42 +110,36 @@ namespace DnsServer
 
             var resultArray = new byte[1024];
             var shift = 0;
-            var cacheStart=0;
+            var cacheStart = 0;
             while (number != 0)
             {
                 if (number >= 0xc0)
                 {
-
                     var cachePosition = ((number & 0b111111) << 8) + query[position + 1];
-                    Array.Copy(cache[cachePosition],0,resultArray,shift,cache[cachePosition].Length);
+                    Array.Copy(cache[cachePosition], 0, resultArray, shift, cache[cachePosition].Length);
                     position++;
                     break;
                 }
-                else
-                {
-                    if (cacheStart == 0)
-                        cacheStart = position;
-                    Array.Copy(query, position + 1, resultArray, shift, number);
-                    position += number + 1;
-                    shift += number;
-                    resultArray[shift] = (byte)'.';
-                    shift++;
-                }
+                if (cacheStart == 0)
+                    cacheStart = position;
+                Array.Copy(query, position + 1, resultArray, shift, number);
+                position += number + 1;
+                shift += number;
+                resultArray[shift] = (byte) '.';
+                shift++;
                 number = query[position];
             }
             position++;
             resultArray = resultArray.TakeWhile(b => b != 0).ToArray();
-            if (cacheStart!=0)
-            for (var i = 0; i < resultArray.Length; i++)
-            {
-                if (resultArray[i] == 46 || i==0)
-                {
-                    var cacheShift = resultArray[i] == 46 ? 1 : 0;
-                    var temp = new byte[512];
-                    Array.Copy(resultArray,i+cacheShift,temp,0,resultArray.Length-i-cacheShift);
-                    cache[cacheStart + i+cacheShift] = temp.TakeWhile(b => b != 0).ToArray();
-                }
-            }
+            if (cacheStart != 0)
+                for (var i = 0; i < resultArray.Length; i++)
+                    if (resultArray[i] == 46 || i == 0)
+                    {
+                        var cacheShift = resultArray[i] == 46 ? 1 : 0;
+                        var temp = new byte[512];
+                        Array.Copy(resultArray, i + cacheShift, temp, 0, resultArray.Length - i - cacheShift);
+                        cache[cacheStart + i + cacheShift] = temp.TakeWhile(b => b != 0).ToArray();
+                    }
             var result = Encoding.UTF8.GetString(resultArray.TakeWhile(b => b != 0).ToArray());
             return (result, position);
         }
@@ -159,19 +156,19 @@ namespace DnsServer
             Array.Reverse(flagsByte);
             result.AddRange(flagsByte);
 
-            var questionsCount = BitConverter.GetBytes((short)packet.Queries.Count);
+            var questionsCount = BitConverter.GetBytes((short) packet.Queries.Count);
             Array.Reverse(questionsCount);
             result.AddRange(questionsCount);
 
-            var answersCount = BitConverter.GetBytes((short)packet.Answers.Count);
+            var answersCount = BitConverter.GetBytes((short) packet.Answers.Count);
             Array.Reverse(answersCount);
             result.AddRange(answersCount);
 
-            var authoritativeCount = BitConverter.GetBytes((short)packet.AuthorityAnswers.Count);
+            var authoritativeCount = BitConverter.GetBytes((short) packet.AuthorityAnswers.Count);
             Array.Reverse(authoritativeCount);
             result.AddRange(authoritativeCount);
 
-            var additionalCount = BitConverter.GetBytes((short)packet.AdditionalAnswers.Count);
+            var additionalCount = BitConverter.GetBytes((short) packet.AdditionalAnswers.Count);
             Array.Reverse(additionalCount);
             result.AddRange(additionalCount);
 
@@ -192,10 +189,10 @@ namespace DnsServer
         {
             var result = new List<byte>();
             var encodedDomain = EncodeDomain(query.Name, position, cache, false);
-            var type = (short)query.AnswerType;
+            var type = (short) query.AnswerType;
             var typeBytes = BitConverter.GetBytes(type);
             Array.Reverse(typeBytes);
-            var classValue = (short)query.Class;
+            var classValue = (short) query.Class;
             var classBytes = BitConverter.GetBytes(classValue);
             Array.Reverse(classBytes);
             result.AddRange(encodedDomain);
@@ -212,22 +209,19 @@ namespace DnsServer
                 var shift = domain.IndexOf(".", StringComparison.Ordinal);
                 if (cache.ContainsKey(domain))
                 {
-                    var number = (ushort)(0b11 << 14 | cache[domain]);
+                    var number = (ushort) (0b11 << 14 | cache[domain]);
                     var bytes = BitConverter.GetBytes(number);
                     Array.Reverse(bytes);
                     result.AddRange(bytes);
                     return result.ToArray();
                 }
-                else
-                {
-                    var name = domain.Substring(0, shift);
-                    result.Add((byte)name.Length);
-                    var encodedName = Encoding.UTF8.GetBytes(name);
-                    result.AddRange(encodedName);
-                    cache[domain] = position+ (isData?2:0);
-                    position += encodedName.Length + 1;
-                    domain = domain.Substring(shift + 1);
-                }
+                var name = domain.Substring(0, shift);
+                result.Add((byte) name.Length);
+                var encodedName = Encoding.UTF8.GetBytes(name);
+                result.AddRange(encodedName);
+                cache[domain] = position + (isData ? 2 : 0);
+                position += encodedName.Length + 1;
+                domain = domain.Substring(shift + 1);
             }
             result.Add(0);
             return result.ToArray();
@@ -239,12 +233,12 @@ namespace DnsServer
             var encodedDomain = EncodeDomain(answer.Name, position, cache, false);
             result.AddRange(encodedDomain);
 
-            var type = (short)answer.AnswerType;
+            var type = (short) answer.AnswerType;
             var typeBytes = BitConverter.GetBytes(type);
             Array.Reverse(typeBytes);
             result.AddRange(typeBytes);
 
-            var classValue = (short)answer.Class;
+            var classValue = (short) answer.Class;
             var classBytes = BitConverter.GetBytes(classValue);
             Array.Reverse(classBytes);
             result.AddRange(classBytes);
@@ -259,11 +253,15 @@ namespace DnsServer
                 Console.WriteLine(answer.Data);
                 dataBytes = IPAddress.Parse(answer.Data).GetAddressBytes();
             }
-            else if (answer.AnswerType==AnswerType.NS)
+            else if (answer.AnswerType == AnswerType.NS)
+            {
                 dataBytes = EncodeDomain(answer.Data, position + result.Count, cache, true);
+            }
             else
-                dataBytes=new byte[0];
-            var length = (ushort)dataBytes.Length;
+            {
+                dataBytes = new byte[0];
+            }
+            var length = (ushort) dataBytes.Length;
             var lengthBytes = BitConverter.GetBytes(length);
             Array.Reverse(lengthBytes);
             result.AddRange(lengthBytes);
@@ -271,7 +269,7 @@ namespace DnsServer
             return result.ToArray();
         }
 
-        public static DnsPacket CreateSimpleErrorPacket(DnsQuery query, ushort queryId,byte replyCode)
+        public static DnsPacket CreateSimpleErrorPacket(DnsQuery query, ushort queryId, byte replyCode)
         {
             var flags = new DnsFlags
             {
@@ -286,7 +284,7 @@ namespace DnsServer
                 Queries = new List<DnsQuery> {query},
                 Answers = new List<DnsAnswer>(),
                 AdditionalAnswers = new List<DnsAnswer>(),
-                AuthorityAnswers = new List<DnsAnswer>(),
+                AuthorityAnswers = new List<DnsAnswer>()
             };
             return packet;
         }

@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Net;
 using System.Net.Sockets;
-using System.Security.Cryptography;
 using System.Threading.Tasks;
 using NLog;
 
@@ -9,49 +7,41 @@ namespace DnsServer
 {
     public static class UdpClientExtensions
     {
-        private static Logger logger = LogManager.GetLogger("DnsServer");
+        private static readonly Logger Logger = LogManager.GetLogger("DnsServer");
+
         public static async Task StartProcessingRequestsAsync(this UdpClient client,
-            Func<UdpReceiveResult, Task<byte[]>> callback,Action quitHandler)
+            Func<UdpReceiveResult, Task<byte[]>> callback, Action quitHandler)
         {
             while (true)
             {
-                logger.Info("Server started");
+                Logger.Info("Server started");
                 try
                 {
                     Console.WriteLine("asdsd");
-                    UdpReceiveResult query;
                     var receiveTask = client.ReceiveAsync().ConfigureAwait(false);
-                    //var res = await Task.WhenAny(receiveTask, Task.Delay(1500));
-                    UdpReceiveResult recvresult = new UdpReceiveResult();
-                    //await receiveTask;
-                    //if (res == receiveTask)
-                    //{
+                    UdpReceiveResult recvresult;
                     try
                     {
                         recvresult = await receiveTask;
                     }
-                    catch (ObjectDisposedException e)
+                    catch (ObjectDisposedException)
                     {
                         quitHandler();
                         return;
                     }
-                    //}
-                    //else
-                    //    continue;
                     Console.WriteLine("bbb");
-                    logger.Info("Query received");
+                    Logger.Info("Query received");
                     var result = await callback(recvresult);
-                    logger.Info("Query handled");
+                    Logger.Info("Query handled");
                     var sendTask = client.SendAsync(result, result.Length, recvresult.RemoteEndPoint);
                     var sendRes = await Task.WhenAny(sendTask, Task.Delay(2000));
-                    int sent;
                     if (sendRes == sendTask)
-                        sent = await sendTask;
-                    logger.Info("Answer sent");
+                        await sendTask;
+                    Logger.Info("Answer sent");
                 }
                 catch (Exception e)
                 {
-                    logger.Error(e.Message);
+                    Logger.Error(e.Message);
                 }
             }
         }

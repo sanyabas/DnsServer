@@ -2,9 +2,9 @@
 {
     public enum AnswerType
     {
-        A=1,
+        A = 1,
         NS,
         MX,
-        SOA=6
+        SOA = 6
     }
 }
