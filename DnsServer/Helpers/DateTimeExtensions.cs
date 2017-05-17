@@ -1,6 +1,6 @@
 using System;
 
-namespace DnsServer
+namespace DnsServer.Helpers
 {
     public static class DateTimeExtensions
     {

@@ -3,7 +3,7 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using NLog;
 
-namespace DnsServer
+namespace DnsServer.Helpers
 {
     public static class UdpClientExtensions
     {
@@ -12,12 +12,11 @@ namespace DnsServer
         public static async Task StartProcessingRequestsAsync(this UdpClient client,
             Func<UdpReceiveResult, Task<byte[]>> callback, Action quitHandler)
         {
+            Logger.Info("Server started");
             while (true)
             {
-                Logger.Info("Server started");
                 try
                 {
-                    Console.WriteLine("asdsd");
                     var receiveTask = client.ReceiveAsync().ConfigureAwait(false);
                     UdpReceiveResult recvresult;
                     try
@@ -29,7 +28,6 @@ namespace DnsServer
                         quitHandler();
                         return;
                     }
-                    Console.WriteLine("bbb");
                     Logger.Info("Query received");
                     var result = await callback(recvresult);
                     Logger.Info("Query handled");

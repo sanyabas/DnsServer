@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 
-namespace DnsServer
+namespace DnsServer.Helpers
 {
     public class BigEndianBinaryReader : BinaryReader
     {

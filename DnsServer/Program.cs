@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using CommandLine;
+using DnsServer.Helpers;
 
 namespace DnsServer
 {
@@ -29,7 +30,6 @@ namespace DnsServer
             {
                 using (var listener = new UdpClient(new IPEndPoint(IPAddress.Any, 53)))
                 {
-                    Console.WriteLine("start listening");
                     var cts = new CancellationTokenSource();
                     Console.CancelKeyPress += (sender, args) =>
                     {

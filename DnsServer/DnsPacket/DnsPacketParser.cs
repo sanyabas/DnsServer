@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using DnsServer.Helpers;
 
 namespace DnsServer
 {
@@ -249,18 +250,11 @@ namespace DnsServer
 
             byte[] dataBytes;
             if (answer.AnswerType == AnswerType.A)
-            {
-                Console.WriteLine(answer.Data);
                 dataBytes = IPAddress.Parse(answer.Data).GetAddressBytes();
-            }
             else if (answer.AnswerType == AnswerType.NS)
-            {
                 dataBytes = EncodeDomain(answer.Data, position + result.Count, cache, true);
-            }
             else
-            {
                 dataBytes = new byte[0];
-            }
             var length = (ushort) dataBytes.Length;
             var lengthBytes = BitConverter.GetBytes(length);
             Array.Reverse(lengthBytes);

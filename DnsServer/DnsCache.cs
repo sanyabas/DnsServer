@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using DnsServer.Helpers;
 using Newtonsoft.Json;
 using NLog;
 
